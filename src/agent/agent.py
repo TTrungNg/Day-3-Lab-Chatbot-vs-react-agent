@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.core.llm_provider import LLMProvider
 from src.telemetry.logger import logger
+from src.telemetry.metrics import tracker
 from src.tools.tools import calculate_dose, check_interaction, search_drug
 
 
@@ -19,6 +20,8 @@ class ReActAgent:
         self.tools = tools or []
         self.max_steps = max_steps
         self.history: List[str] = []
+        self.last_run_stats: Dict[str, Any] = {}
+        self._safety_type: str = "normal"
 
     def get_system_prompt(self) -> str:
         tool_lines: List[str] = []
@@ -66,6 +69,17 @@ class ReActAgent:
         steps = 0
         last_observation: Optional[str] = None
         observations: List[str] = []
+        self._safety_type = "normal"
+        _stats: Dict[str, Any] = {
+            "llm_calls": 0,
+            "tool_calls": 0,
+            "total_latency_ms": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "escalation_triggered": False,
+            "fallback_triggered": False,
+            "stop_reason": "",
+        }
 
         while steps < self.max_steps:
             if last_observation is not None:
@@ -73,6 +87,17 @@ class ReActAgent:
                 last_observation = None
 
             result = self.llm.generate(transcript, system_prompt=self.get_system_prompt())
+            _stats["llm_calls"] += 1
+            _stats["total_latency_ms"] += (result or {}).get("latency_ms", 0)
+            _u = (result or {}).get("usage", {})
+            _stats["prompt_tokens"] += _u.get("prompt_tokens", 0)
+            _stats["completion_tokens"] += _u.get("completion_tokens", 0)
+            tracker.track_request(
+                provider=(result or {}).get("provider", "unknown"),
+                model=self.llm.model_name,
+                usage=_u,
+                latency_ms=(result or {}).get("latency_ms", 0),
+            )
             content = (result or {}).get("content", "") or ""
             self.history.append(content)
 
@@ -84,6 +109,10 @@ class ReActAgent:
                     transcript=transcript,
                     observations=observations,
                 )
+                _stats["escalation_triggered"] = (self._safety_type == "escalate")
+                _stats["fallback_triggered"] = self._safety_type.startswith("fallback")
+                _stats["stop_reason"] = "final"
+                self.last_run_stats = _stats
                 logger.log_event("AGENT_END", {"steps": steps + 1, "stop_reason": "final"})
                 return safe
 
@@ -95,6 +124,10 @@ class ReActAgent:
                     transcript=transcript,
                     observations=observations,
                 )
+                _stats["escalation_triggered"] = (self._safety_type == "escalate")
+                _stats["fallback_triggered"] = self._safety_type.startswith("fallback")
+                _stats["stop_reason"] = "format_fallback"
+                self.last_run_stats = _stats
                 logger.log_event("AGENT_END", {"steps": steps + 1, "stop_reason": "format_fallback"})
                 return safe
 
@@ -104,6 +137,7 @@ class ReActAgent:
             safe_observation = observation.encode("unicode_escape").decode("ascii")
             logger.info(f"[TOOL_OBSERVATION] name={tool_name} observation={safe_observation[:300]}")
             observations.append(observation)
+            _stats["tool_calls"] += 1
 
             transcript += f"{content.strip()}\n"
             last_observation = observation
@@ -114,14 +148,30 @@ class ReActAgent:
             transcript + "Reason: Đã đủ bước tool. Hãy tóm tắt với thông tin hiện có.\nFinal Answer:",
             system_prompt=self.get_system_prompt(),
         )
+        _stats["llm_calls"] += 1
+        _stats["total_latency_ms"] += (result or {}).get("latency_ms", 0)
+        _u = (result or {}).get("usage", {})
+        _stats["prompt_tokens"] += _u.get("prompt_tokens", 0)
+        _stats["completion_tokens"] += _u.get("completion_tokens", 0)
+        tracker.track_request(
+            provider=(result or {}).get("provider", "unknown"),
+            model=self.llm.model_name,
+            usage=_u,
+            latency_ms=(result or {}).get("latency_ms", 0),
+        )
         content = (result or {}).get("content", "") or ""
         final = self._extract_final_answer(content) or content.strip()
-        return self._safety_check(
+        safe = self._safety_check(
             user_input=user_input,
             draft_answer=final,
             transcript=transcript,
             observations=observations,
         )
+        _stats["escalation_triggered"] = (self._safety_type == "escalate")
+        _stats["fallback_triggered"] = self._safety_type.startswith("fallback")
+        _stats["stop_reason"] = "max_steps"
+        self.last_run_stats = _stats
+        return safe
 
     def _parse_action(self, llm_text: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         # Action: {"tool":"name","args":{...}}
@@ -217,6 +267,7 @@ class ReActAgent:
         observations: List[str],
     ) -> str:
         if self._has_tool_errors(observations):
+            self._safety_type = "fallback_error"
             return (
                 "Mình đang gặp lỗi khi truy xuất dữ liệu thuốc cho câu hỏi này. "
                 "Bạn thử nhập lại tên thuốc/định dạng câu hỏi, hoặc thử lại sau."
@@ -228,8 +279,10 @@ class ReActAgent:
             clarifying_keywords = ["bao nhiêu", "như thế nào", "vui lòng", "bạn có thể", "ý bạn là", "thuốc nào", "tên thuốc", "cho mình biết"]
             is_clarifying_question = "?" in draft_answer or any(word in draft_answer.lower() for word in clarifying_keywords)
             if is_clarifying_question:
+                self._safety_type = "normal"
                 return draft_answer.strip()
 
+            self._safety_type = "fallback_nodata"
             return (
                 "Xin lỗi, mình chỉ có thể trả lời trong phạm vi dữ liệu thuốc hiện có của hệ thống "
                 "(tra cứu thuốc, tương tác thuốc, tính liều)."
@@ -271,6 +324,7 @@ class ReActAgent:
         harmful = any(re.search(p, user_input, flags=re.IGNORECASE) for p in harmful_patterns)
 
         if harmful or dangerous:
+            self._safety_type = "escalate"
             logger.log_event(
                 "AGENT_SAFETY_ESCALATE",
                 {"dangerous_interaction": dangerous, "harmful_request": harmful},
@@ -281,6 +335,7 @@ class ReActAgent:
             )
             return prefix + draft_answer.strip()
 
+        self._safety_type = "normal"
         return draft_answer.strip()
 
     def _has_grounded_data(self, observations: List[str]) -> bool:
