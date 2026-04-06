@@ -68,6 +68,12 @@ class TestTools(unittest.TestCase):
     def test_calculate_dose_unknown_drug(self):
         self.assertIsNone(calculate_dose("UnknownDrug", weight_kg=30, age_years=10))
 
+    def test_calculate_dose_localized_entry(self):
+        result = calculate_dose("Aficamten", weight_kg=50, age_years=17)
+        self.assertEqual(result["drug"], "Aficamten")
+        self.assertEqual(result["age_group"], "adult")
+        self.assertIn("5 mg/ngày", result["recommended_dose"])
+
 
 if __name__ == "__main__":
     unittest.main()
