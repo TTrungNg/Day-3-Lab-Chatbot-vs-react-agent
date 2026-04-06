@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from pathlib import Path
 from typing import List, MutableSequence
 
@@ -37,6 +38,24 @@ with st.sidebar:
         index=0,
     )
 
+    if mode == "💬 Chatbot":
+        turn_stats = st.session_state.get("chatbot_turn_stats", [])
+        if turn_stats:
+            st.divider()
+            st.subheader("📊 Session Metrics")
+            n = len(turn_stats)
+            total_latency = sum(s.get("latency_ms", 0) for s in turn_stats)
+            avg_latency = total_latency // n
+            max_latency = max(s.get("latency_ms", 0) for s in turn_stats)
+            total_tokens = sum(s.get("total_tokens", 0) for s in turn_stats)
+            avg_tokens = total_tokens // n
+            c1, c2 = st.columns(2)
+            c1.metric("Turns", n)
+            c2.metric("Total Tokens", total_tokens)
+            c1.metric("Avg Latency", f"{avg_latency} ms")
+            c2.metric("P99 Latency", f"{max_latency} ms")
+            c1.metric("Avg Tokens", avg_tokens)
+
     if mode == "🧪 ReAct Agent":
         st.divider()
         st.subheader("Cấu hình Agent")
@@ -52,10 +71,36 @@ with st.sidebar:
         selected_model = st.selectbox("Model", options=_model_options, index=_model_idx)
         max_steps = st.slider("Max tool steps", min_value=1, max_value=10, value=5)
 
+        # --- Session Metrics Dashboard ---
+        turn_stats = st.session_state.get("agent_turn_stats", [])
+        if turn_stats:
+            st.divider()
+            st.subheader("📊 Session Metrics")
+            n = len(turn_stats)
+            total_tool_calls = sum(s.get("tool_calls", 0) for s in turn_stats)
+            total_latency = sum(s.get("total_latency_ms", 0) for s in turn_stats)
+            avg_latency = total_latency // n
+            max_latency = max(s.get("total_latency_ms", 0) for s in turn_stats)
+            total_tokens = sum(s.get("prompt_tokens", 0) + s.get("completion_tokens", 0) for s in turn_stats)
+            avg_tokens = total_tokens // n
+            n_escalate = sum(1 for s in turn_stats if s.get("escalation_triggered"))
+            n_fallback = sum(1 for s in turn_stats if s.get("fallback_triggered"))
+            c1, c2 = st.columns(2)
+            c1.metric("Turns", n)
+            c2.metric("Tool Calls", total_tool_calls)
+            c1.metric("Avg Latency", f"{avg_latency} ms")
+            c2.metric("P99 Latency", f"{max_latency} ms")
+            c1.metric("Avg Tokens", avg_tokens)
+            c2.metric("Total Tokens", total_tokens)
+            c1.metric("Escalations", f"{n_escalate}/{n}")
+            c2.metric("Fallbacks", f"{n_fallback}/{n}")
+
     st.divider()
     if st.button("🗑️ Xóa hội thoại"):
         st.session_state.chatbot_history = []
+        st.session_state.chatbot_turn_stats = []
         st.session_state.agent_messages = []
+        st.session_state.agent_turn_stats = []
         st.rerun()
 
 # ---------------------------------------------------------------------------
@@ -64,8 +109,14 @@ with st.sidebar:
 if "chatbot_history" not in st.session_state:
     st.session_state.chatbot_history = []
 
+if "chatbot_turn_stats" not in st.session_state:
+    st.session_state.chatbot_turn_stats = []
+
 if "agent_messages" not in st.session_state:
     st.session_state.agent_messages = []
+
+if "agent_turn_stats" not in st.session_state:
+    st.session_state.agent_turn_stats = []
 
 # ---------------------------------------------------------------------------
 # CHATBOT mode
@@ -106,18 +157,45 @@ Phong cách trả lời: Chuyên nghiệp, thận trọng, ngắn gọn.""",
         if isinstance(msg, HumanMessage):
             st.chat_message("user").write(msg.content)
         elif isinstance(msg, AIMessage):
-            st.chat_message("assistant").write(msg.content)
+            with st.chat_message("assistant"):
+                st.write(msg.content)
+                if msg.additional_kwargs.get("_metrics"):
+                    s = msg.additional_kwargs["_metrics"]
+                    with st.expander(f"📈 Turn metrics — {s['latency_ms']} ms · {s['total_tokens']} tokens"):
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Latency", f"{s['latency_ms']} ms")
+                        c2.metric("Prompt tokens", s['input_tokens'])
+                        c3.metric("Completion tokens", s['output_tokens'])
 
     user_input = st.chat_input("Hỏi về thuốc, liều dùng, tương tác...")
     if user_input:
         st.chat_message("user").write(user_input)
         st.session_state.chatbot_history.append(HumanMessage(content=user_input))
 
+        t0 = time.time()
         response = chain.invoke({"history": st.session_state.chatbot_history})
-        bot_reply = response.content
+        latency_ms = int((time.time() - t0) * 1000)
 
-        st.chat_message("assistant").write(bot_reply)
-        st.session_state.chatbot_history.append(AIMessage(content=bot_reply))
+        bot_reply = response.content
+        usage = response.usage_metadata or {}
+        turn_s = {
+            "latency_ms": latency_ms,
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+        }
+        st.session_state.chatbot_turn_stats.append(turn_s)
+
+        ai_msg = AIMessage(content=bot_reply, additional_kwargs={"_metrics": turn_s})
+        st.session_state.chatbot_history.append(ai_msg)
+
+        with st.chat_message("assistant"):
+            st.write(bot_reply)
+            with st.expander(f"📈 Turn metrics — {latency_ms} ms · {turn_s['total_tokens']} tokens"):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Latency", f"{latency_ms} ms")
+                c2.metric("Prompt tokens", turn_s['input_tokens'])
+                c3.metric("Completion tokens", turn_s['output_tokens'])
 
 # ---------------------------------------------------------------------------
 # REACT AGENT mode
@@ -162,6 +240,25 @@ else:
     for msg in st.session_state.agent_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg["role"] == "assistant" and msg.get("stats"):
+                s = msg["stats"]
+                total_tok = s.get("prompt_tokens", 0) + s.get("completion_tokens", 0)
+                with st.expander(f"📈 Turn metrics — {s.get('total_latency_ms', 0)} ms · {total_tok} tokens · {s.get('tool_calls', 0)} tool calls"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Latency", f"{s.get('total_latency_ms', 0)} ms")
+                    c2.metric("Tokens", total_tok)
+                    c3.metric("Tool Calls", s.get("tool_calls", 0))
+                    c4.metric("LLM Calls", s.get("llm_calls", 0))
+                    col1, col2 = st.columns(2)
+                    col1.metric("Prompt tokens", s.get("prompt_tokens", 0))
+                    col2.metric("Completion tokens", s.get("completion_tokens", 0))
+                    stop = s.get("stop_reason", "")
+                    if s.get("escalation_triggered"):
+                        st.error("⚠️ ESCALATE triggered")
+                    elif s.get("fallback_triggered"):
+                        st.warning("ℹ️ Fallback triggered")
+                    else:
+                        st.success(f"✅ Normal — stop: {stop}")
 
     user_text = st.chat_input("Hỏi về thuốc, tương tác, hoặc liều dùng...")
     if user_text:
@@ -175,9 +272,27 @@ else:
             try:
                 answer = agent.run(prompt)
                 st.markdown(answer)
+                turn_s = agent.last_run_stats.copy()
+                total_tok = turn_s.get("prompt_tokens", 0) + turn_s.get("completion_tokens", 0)
+                with st.expander(f"📈 Turn metrics — {turn_s.get('total_latency_ms', 0)} ms · {total_tok} tokens · {turn_s.get('tool_calls', 0)} tool calls"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Latency", f"{turn_s.get('total_latency_ms', 0)} ms")
+                    c2.metric("Tokens", total_tok)
+                    c3.metric("Tool Calls", turn_s.get("tool_calls", 0))
+                    c4.metric("LLM Calls", turn_s.get("llm_calls", 0))
+                    col1, col2 = st.columns(2)
+                    col1.metric("Prompt tokens", turn_s.get("prompt_tokens", 0))
+                    col2.metric("Completion tokens", turn_s.get("completion_tokens", 0))
+                    if turn_s.get("escalation_triggered"):
+                        st.error("⚠️ ESCALATE triggered")
+                    elif turn_s.get("fallback_triggered"):
+                        st.warning("ℹ️ Fallback triggered")
+                    else:
+                        st.success(f"✅ Normal — stop: {turn_s.get('stop_reason', '')}")
             except Exception as e:
                 st.error(f"Lỗi chạy agent: {e}")
                 st.session_state.agent_messages.pop()
                 st.stop()
 
-        st.session_state.agent_messages.append({"role": "assistant", "content": answer})
+        st.session_state.agent_turn_stats.append(agent.last_run_stats.copy())
+        st.session_state.agent_messages.append({"role": "assistant", "content": answer, "stats": agent.last_run_stats.copy()})
