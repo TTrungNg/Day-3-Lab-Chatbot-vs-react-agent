@@ -222,6 +222,11 @@ class ReActAgent:
             )
 
         if not self._has_grounded_data(observations):
+            # Cho phép Agent đặt câu hỏi hoặc yêu cầu thêm thông tin để phục vụ việc gọi Tool
+            is_clarifying_question = "?" in draft_answer or any(word in draft_answer.lower() for word in ["bao nhiêu", "như thế nào", "vui lòng", "bạn có thể", "ý bạn là"])
+            if is_clarifying_question:
+                return draft_answer.strip()
+
             return (
                 "Xin lỗi, mình chỉ có thể trả lời trong phạm vi dữ liệu thuốc hiện có của hệ thống "
                 "(tra cứu thuốc, tương tác thuốc, tính liều)."
@@ -294,8 +299,12 @@ class ReActAgent:
                 if obj is None:
                     continue
                 if isinstance(obj, dict):
+                    # Nếu tool trả về lỗi thực sự (thất bại hệ thống) thì không coi là grounded data
                     if "error" in obj:
                         continue
+                    # Cho phép các thông tin gợi ý hoặc thông báo thiếu dữ liệu từ tool
+                    if "status" in obj or "message" in obj:
+                        return True
                     if obj.get("interaction") == "unknown":
                         continue
                     return True
@@ -338,7 +347,7 @@ def default_tools() -> List[Dict[str, Any]]:
         },
         {
             "name": "calculate_dose",
-            "description": "Tính liều gợi ý theo cân nặng (kg) và tuổi (năm).",
+            "description": "Tính liều gợi ý theo cân nặng (kg) và tuổi (năm). KHÔNG ĐƯỢC TỰ ĐOÁN cân nặng và tuổi. Nếu user chưa cung cấp thì phải truyền vào 0.",
             "args_schema": {"drug_name": "string", "weight_kg": "number", "age_years": "number"},
             "func": calculate_dose,
         },

@@ -190,7 +190,21 @@ def search_drug(drug_name):
         if name.lower() == normalized:
             return data
 
-    return None
+    import difflib
+    lower_to_original = {name.lower(): name for name in medicines.keys()}
+    matches = difflib.get_close_matches(normalized, list(lower_to_original.keys()), n=1, cutoff=0.5)
+    
+    if matches:
+        suggestion = lower_to_original[matches[0]]
+        return {
+            "status": "suggested",
+            "message": f"Dạ, mình không tìm thấy thuốc '{drug_name}'. Ý bạn có phải là '{suggestion}' không?"
+        }
+
+    return {
+        "status": "not_found",
+        "message": f"Dạ, hiện hệ thống chưa có thông tin về thuốc '{drug_name}'. Bạn có thể kiểm tra lại tên thuốc giúp mình nhé!"
+    }
 
 
 def _get_med_field(med, *keys):
@@ -205,13 +219,11 @@ def check_interaction(drug1, drug2):
     med1 = search_drug(drug1)
     med2 = search_drug(drug2)
 
-    if med1 is None or med2 is None:
-        return {
-            "drug1": drug1,
-            "drug2": drug2,
-            "interaction": "unknown",
-            "message": "Một trong 2 loại thuốc không được tìm thấy trong cơ sở dữ liệu mô phỏng."
-        }
+    if med1 is None or med1.get("status") == "not_found" or med1.get("status") == "suggested":
+        return med1 if med1 else {"status": "not_found", "message": f"Dạ, hệ thống không tìm thấy thuốc '{drug1}'."}
+        
+    if med2 is None or med2.get("status") == "not_found" or med2.get("status") == "suggested":
+        return med2 if med2 else {"status": "not_found", "message": f"Dạ, hệ thống không tìm thấy thuốc '{drug2}'."}
 
     med1_name = _get_med_field(med1, "name", "tên")
     med2_name = _get_med_field(med2, "name", "tên")
@@ -345,17 +357,21 @@ def calculate_dose(drug_name, weight_kg, age_years):
     med = search_drug(drug_name)
     if med is None:
         return None
+    
+    if med.get("status") == "not_found" or med.get("status") == "suggested":
+        return med
 
+    missing = []
     if not isinstance(weight_kg, (int, float)) or weight_kg <= 0:
+        missing.append("cân nặng")
+    if not isinstance(age_years, (int, float)) or age_years <= 0:
+        missing.append("độ tuổi")
+        
+    if missing:
+        missing_str = " và ".join(missing)
         return {
             "drug": drug_name,
-            "error": "Invalid weight. Weight must be a positive number."
-        }
-
-    if not isinstance(age_years, (int, float)) or age_years < 0:
-        return {
-            "drug": drug_name,
-            "error": "Invalid age. Age must be a non-negative number."
+            "message": f"Dạ, để tính liều lượng {drug_name} chính xác và an toàn, bạn vui lòng cho mình biết thông tin về {missing_str} nhé!"
         }
 
     if age_years < 16:
