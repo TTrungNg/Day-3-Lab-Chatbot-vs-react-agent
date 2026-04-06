@@ -54,6 +54,7 @@ class ReActAgent:
             "- Args phải là JSON hợp lệ.\n"
             "- Không bịa Observation.\n"
             "- CHỈ trả lời trong phạm vi dữ liệu tool trả về. Nếu không có dữ liệu phù hợp, phải từ chối ngắn gọn.\n"
+            "- HÃY ĐỂ Ý LỊCH SỬ HỘI THOẠI: Nếu câu hỏi hiện tại thiếu thông tin (vd: 'liều lượng' mà không nói tên thuốc), hãy dựa vào các tin nhắn trước đó trong 'User Input' để tìm dữ liệu.\n"
             "- Nếu phát hiện rủi ro an toàn (tương tác thuốc 'dangerous' hoặc user yêu cầu hướng dẫn nguy hiểm), "
             "hãy ưu tiên ESCALATE: cảnh báo + khuyến nghị gặp bác sĩ/dược sĩ.\n"
         )
@@ -223,7 +224,9 @@ class ReActAgent:
 
         if not self._has_grounded_data(observations):
             # Cho phép Agent đặt câu hỏi hoặc yêu cầu thêm thông tin để phục vụ việc gọi Tool
-            is_clarifying_question = "?" in draft_answer or any(word in draft_answer.lower() for word in ["bao nhiêu", "như thế nào", "vui lòng", "bạn có thể", "ý bạn là"])
+            # Bao gồm cả trường hợp Agent hỏi lại tên thuốc nếu lịch sử cũng không có.
+            clarifying_keywords = ["bao nhiêu", "như thế nào", "vui lòng", "bạn có thể", "ý bạn là", "thuốc nào", "tên thuốc", "cho mình biết"]
+            is_clarifying_question = "?" in draft_answer or any(word in draft_answer.lower() for word in clarifying_keywords)
             if is_clarifying_question:
                 return draft_answer.strip()
 

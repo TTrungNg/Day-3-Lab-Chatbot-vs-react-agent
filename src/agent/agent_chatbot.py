@@ -38,7 +38,10 @@ def _build_context_prompt(messages: List[dict], current_user_text: str, max_turn
     """
     Build a compact context so the ReAct agent can answer coherently across turns.
     """
-    recent = messages[-max_turns * 2 :] if messages else []
+    # Lấy lịch sử nhưng loại bỏ tin nhắn cuối cùng (chính là current_user_text vừa được append)
+    history_messages = messages[:-1] if len(messages) > 0 else []
+    recent = history_messages[-max_turns * 2 :] if history_messages else []
+    
     context_lines: MutableSequence[str] = []
     for m in recent:
         role = m.get("role", "user")
@@ -50,9 +53,9 @@ def _build_context_prompt(messages: List[dict], current_user_text: str, max_turn
         return current_user_text
 
     return (
-        "Đây là lịch sử hội thoại gần nhất:\n"
+        "Đây là lịch sử hội thoại gần nhất để bạn nắm bắt ngữ cảnh:\n"
         f"{context_block}\n\n"
-        "Câu hỏi hiện tại của user:\n"
+        "Dựa vào ngữ cảnh trên, hãy trả lời câu hỏi hiện tại của user:\n"
         f"{current_user_text}"
     )
 
