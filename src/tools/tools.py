@@ -190,6 +190,17 @@ def search_drug(drug_name):
         if name.lower() == normalized:
             return data
 
+    # Check if it matches a category exactly (case-insensitive)
+    for data in medicines.values():
+        category = _get_med_field(data, "category", "loại_thuốc")
+        if category and category.lower() == normalized:
+            return {
+                "name": category,
+                "category": category,
+                "is_category": True,
+                "note": "Đây là thông tin chung cho nhóm thuốc này."
+            }
+
     import difflib
     lower_to_original = {name.lower(): name for name in medicines.keys()}
     matches = difflib.get_close_matches(normalized, list(lower_to_original.keys()), n=1, cutoff=0.5)
@@ -360,6 +371,13 @@ def calculate_dose(drug_name, weight_kg, age_years):
     
     if med.get("status") == "not_found" or med.get("status") == "suggested":
         return med
+
+    if med.get("is_category"):
+        return {
+            "drug": med.get("name"),
+            "status": "not_applicable",
+            "message": f"Dạ, mình không thể tính liều lượng chính xác cho cả nhóm '{med.get('name')}'. Bạn vui lòng cung cấp tên thuốc cụ thể (ví dụ: Warfarin, Amoxicillin...) để mình hỗ trợ nhé!"
+        }
 
     missing = []
     if not isinstance(weight_kg, (int, float)) or weight_kg <= 0:
