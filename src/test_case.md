@@ -78,7 +78,6 @@ Expected response:
 
     Bạn có thể:
     - Kiểm tra lại tên thuốc
-    - Cung cấp tên hoạt chất
     - Cung cấp tên thương mại khác
 
     Lưu ý: Không nên sử dụng thuốc khi chưa xác định rõ thông tin.
@@ -99,6 +98,25 @@ Expected response:
     - Bạn đang dùng thuốc nào?
 
     Vui lòng cung cấp thêm thông tin.
+
+# 6. Out of domain (câu hỏi hoàn toàn không liên quan tới chủ đề)
+Input: 
+- "Hà Nội đêm nay có mưa không?"
+
+Expected output:
+- Nhận diện câu hỏi không thuộc đúng lĩnh vực thuốc/y tế
+- Không cố trả lời 
+- Redirect về phạm vi hệ thống
+
+Expected response:
+    Tôi là trợ lý AI chuyên về tra cứu thuốc và tương tác thuốc.
+    Tôi không thể trả lời câu hỏi về thời tiết.
+
+    Bạn có thể hỏi tôi về:
+    - Công dụng thuốc
+    - Liều dùng
+    - Tương tác thuốc
+    - Cảnh báo an toàn thuốc
 
 ###### Fallback logic
 Flow: 
