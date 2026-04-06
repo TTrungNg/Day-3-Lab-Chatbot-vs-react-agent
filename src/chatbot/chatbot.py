@@ -57,7 +57,7 @@ if user_input:
 
     # Get response
     response = chain.invoke({"history": st.session_state.history})
-    bot_reply = response.content[0]["text"]
+    bot_reply = response.content
 
     # Show bot message
     st.chat_message("assistant").write(bot_reply)
