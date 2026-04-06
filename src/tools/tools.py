@@ -374,7 +374,7 @@ def calculate_dose(drug_name, weight_kg, age_years):
     if "mg/kg" in dose_text.lower():
         calculated = _calculate_mgkg_dose(dose_text, weight_kg)
         return {
-            "drug": med["name"],
+            "drug": _get_med_field(med, "name", "tên"),
             "age_group": age_group,
             "weight_kg": weight_kg,
             "recommended_dose": dose_text,
@@ -382,7 +382,7 @@ def calculate_dose(drug_name, weight_kg, age_years):
         }
 
     return {
-        "drug": med["name"],
+        "drug": _get_med_field(med, "name", "tên"),
         "age_group": age_group,
         "weight_kg": weight_kg,
         "recommended_dose": dose_text,
