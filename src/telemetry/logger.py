@@ -35,6 +35,15 @@ class IndustryLogger:
         }
         self.logger.info(json.dumps(payload))
 
+    def log_escalation(self, drug1: str, drug2: str, reason: str):
+        """Logs a dangerous drug interaction escalation event."""
+        self.log_event("ESCALATE", {
+            "drug1": drug1,
+            "drug2": drug2,
+            "reason": reason,
+            "flag": "ESCALATE"
+        })
+
     def info(self, msg: str):
         self.logger.info(msg)
 
