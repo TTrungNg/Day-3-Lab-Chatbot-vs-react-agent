@@ -4,7 +4,14 @@ This document describes the available mock drug database and helper functions im
 
 ## Mock Database: `medicines`
 
-A dictionary where each key is a medicine name and each value is a dictionary with the following fields:
+A dictionary where each key is a medicine name and each value is a dictionary describing the medicine.
+
+The database currently includes two entry formats:
+
+1. Legacy entries using standard English field names.
+2. Newer entries using localized Vietnamese field names and additional metadata fields.
+
+### Legacy entry fields
 
 - `name`: string
 - `dose_adults`: string
@@ -13,16 +20,38 @@ A dictionary where each key is a medicine name and each value is a dictionary wi
 - `contraindications`: string
 - `main_active_ingredient`: string
 
-### Example entry
+### Localized entry fields
+
+- `tên`: string
+- `liều_dùng_người_lớn`: string
+- `liều_dùng_trẻ_em`: string
+- `loại_thuốc`: string
+- `chống_chỉ_ định`: string
+- `thành_phần_chính`: string
+
+### Example legacy entry
 
 ```python
 "Aspirin": {
     "name": "Aspirin",
-    "dose_adults": "325-650mg every 4-6 hours",
-    "dose_children": "Not recommended for children under 16",
-    "category": "Analgesic",
-    "contraindications": "Allergy to aspirin, bleeding disorders, ulcers",
-    "main_active_ingredient": "Acetylsalicylic acid"
+    "dose_adults": "325-650mg mỗi 4-6 giờ",
+    "dose_children": "Không khuyến cáo cho trẻ dưới 16 tuổi",
+    "category": "Thuốc giảm đau",
+    "contraindications": "Dị ứng aspirin, rối loạn chảy máu, loét dạ dày",
+    "main_active_ingredient": "Acid acetylsalicylic"
+}
+```
+
+### Example localized entry
+
+```python
+"Alyftrek": {
+    "tên": "Alyftrek",
+    "liều_dùng_người_lớn": "2 viên (vanzacaftor 200mg/tezacaftor 150mg/deutivacaftor 200mg) uống một lần mỗi ngày vào buổi sáng",
+    "liều_dùng_trẻ_em": "Dành cho trẻ từ 6 tuổi trở lên, liều lượng điều chỉnh theo cân nặng (thường là 1 viên/ngày cho trẻ dưới 30kg)",
+    "loại_thuốc": "Thuốc điều hòa protein CFTR (Cystic Fibrosis Transmembrane Conductance Regulator)",
+    "chống_chỉ_ định": "Quá mẫn với bất kỳ thành phần nào của thuốc, suy gan nặng",
+    "thành_phần_chính": "Vanzacaftor, Tezacaftor, Deutivacaftor"
 }
 ```
 
@@ -44,6 +73,8 @@ Lookup a medicine by name.
 #### Notes
 
 - Matching is case-insensitive and trims whitespace.
+- Returned medicine dictionaries may use either the legacy English field set or the newer localized Vietnamese field set.
+- `check_interaction` will read category values from either `category` or `loại_thuốc`, so `category1` and `category2` may also be localized Vietnamese names.
 
 ### `check_interaction(drug1, drug2)`
 
@@ -81,9 +112,9 @@ A dictionary with these fields:
     "drug1": "Warfarin",
     "drug2": "Ibuprofen",
     "interaction": "dangerous",
-    "message": "NSAIDs can increase the risk of bleeding when taken with anticoagulants.",
-    "category1": "Anticoagulant",
-    "category2": "Non-steroidal anti-inflammatory drug (NSAID)"
+    "message": "NSAID có thể làm tăng nguy cơ chảy máu khi dùng cùng với thuốc chống đông.",
+    "category1": "Thuốc chống đông máu",
+    "category2": "Thuốc chống viêm không steroid (NSAID)"
 }
 ```
 
@@ -121,6 +152,7 @@ If the drug is not found, returns `None`.
 - Otherwise, the adult dose is used.
 - If the selected dose text contains `mg/kg`, the function computes a weight-based range.
 - For standard adult doses without `mg/kg`, the function returns the dose string unchanged.
+- The function supports both English and Vietnamese dose descriptions, as long as the `mg/kg` pattern is present.
 
 #### Example result
 
@@ -129,8 +161,8 @@ If the drug is not found, returns `None`.
     "drug": "Ibuprofen",
     "age_group": "child",
     "weight_kg": 20,
-    "recommended_dose": "5-10mg/kg every 6-8 hours",
-    "calculated_dose": "100-200mg every 6-8 hours"
+    "recommended_dose": "5-10mg/kg mỗi 6-8 giờ",
+    "calculated_dose": "100-200mg mỗi 6-8 giờ"
 }
 ```
 

@@ -20,7 +20,7 @@ class TestTools(unittest.TestCase):
     def test_check_interaction_dangerous(self):
         result = check_interaction("Warfarin", "Ibuprofen")
         self.assertEqual(result["interaction"], "dangerous")
-        self.assertIn("bleeding", result["message"].lower())
+        self.assertIn("chảy máu", result["message"].lower())
 
     def test_check_interaction_same_drug(self):
         result = check_interaction("Aspirin", "Aspirin")
@@ -31,8 +31,14 @@ class TestTools(unittest.TestCase):
     def test_check_interaction_low(self):
         result = check_interaction("Aspirin", "Omeprazole")
         self.assertEqual(result["interaction"], "low")
-        self.assertEqual(result["category1"], "Analgesic")
-        self.assertEqual(result["category2"], "Proton pump inhibitor")
+        self.assertEqual(result["category1"], "Thuốc giảm đau")
+        self.assertEqual(result["category2"], "Ức chế bơm proton")
+
+    def test_search_drug_localized_entry(self):
+        result = search_drug("Alyftrek")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["tên"], "Alyftrek")
+        self.assertEqual(result["liều_dùng_người_lớn"].startswith("2 viên"), True)
 
     def test_check_interaction_unknown(self):
         result = check_interaction("Aspirin", "UnknownDrug")
@@ -41,14 +47,14 @@ class TestTools(unittest.TestCase):
     def test_calculate_dose_child_weight_based(self):
         result = calculate_dose("Ibuprofen", weight_kg=20, age_years=10)
         self.assertEqual(result["age_group"], "child")
-        self.assertEqual(result["recommended_dose"], "5-10mg/kg every 6-8 hours")
-        self.assertEqual(result["calculated_dose"], "100-200mg every 6-8 hours")
+        self.assertEqual(result["recommended_dose"], "5-10mg/kg mỗi 6-8 giờ")
+        self.assertEqual(result["calculated_dose"], "100-200mg mỗi 6-8 giờ")
 
     def test_calculate_dose_adult_standard(self):
         result = calculate_dose("Omeprazole", weight_kg=70, age_years=30)
         self.assertEqual(result["age_group"], "adult")
-        self.assertEqual(result["recommended_dose"], "20mg once daily")
-        self.assertEqual(result["calculated_dose"], "20mg once daily")
+        self.assertEqual(result["recommended_dose"], "20mg mỗi ngày một lần")
+        self.assertEqual(result["calculated_dose"], "20mg mỗi ngày một lần")
         self.assertIn("note", result)
 
     def test_calculate_dose_invalid_weight(self):
