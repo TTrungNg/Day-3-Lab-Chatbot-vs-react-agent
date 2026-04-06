@@ -7,6 +7,7 @@
   2A202600397 Nguyễn Hữu Nam
   2A202600428 Trần Ngô Hồng Hà
   2A202600244 Nguyễn Việt Trung
+  2A202600055 Hà Việt Khánh
   ]
 - **Deployment Date**: [2026-04-06]
 
