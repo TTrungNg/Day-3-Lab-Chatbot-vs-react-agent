@@ -1,6 +1,6 @@
 # Group Report: Lab 3 - Production-Grade Agentic System
 
-- **Team Name**: [Team Name]
+- **Team Name**: [E402_07]
 - **Team Members**: [
   2A202600474 Mã Khoa Học
   2A202600232 Nguyễn Tuấn Kiệt
