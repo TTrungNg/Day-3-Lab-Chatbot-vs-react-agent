@@ -14,9 +14,7 @@ Trong buổi lab này, tôi tập trung xây dựng hoàn chỉnh luồng ReAct 
   - `src/agent/agent.py`: hoàn thiện ReAct core loop (Reason -> Action -> Observation -> lặp -> Final Answer -> Safety Check), parser `Action`, thực thi tool động, domain guard, safety guard, log tool call.
   - `src/agent/run_agent.py`: CLI để chạy agent tương tác trực tiếp với OpenAI/Gemini/Local provider.
   - `src/agent/agent_chatbot.py`: UI Streamlit cho agent dựa trên giao diện baseline chatbot.
-  - `src/agent/test_agent.py`: test cho flow gọi tool, safety escalate, và out-of-scope refusal.
   - `src/tools/tools.py`: sửa lỗi tính liều với dữ liệu localized (`name`/`tên`) cho thuốc như `Aficamten`.
-  - `src/tools/test_tools.py`: thêm test cho `calculate_dose` với thuốc localized.
 
 - **Code Highlights**:
   - Agent parse được 2 format action:
